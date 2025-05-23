@@ -1,33 +1,8 @@
 version: 2
-# Use Railway's PostgreSQL plugin for the database
-plugins:
-  - name: postgresql
-    serviceId: letta_db_service
-    envs:
-      - name: PGUSER
-        fromService:
-          name: letta_db_service
-          envKey: POSTGRES_USER
-      - name: PGPASSWORD
-        fromService:
-          name: letta_db_service
-          envKey: POSTGRES_PASSWORD
-      - name: PGDATABASE
-        fromService:
-          name: letta_db_service
-          envKey: POSTGRES_DB
-      - name: PGHOST
-        fromService:
-          name: letta_db_service
-          property: host
-      - name: PGPORT
-        fromService:
-          name: letta_db_service
-          property: port
-
+# Setup matching the official Letta template
 services:
-  # PostgreSQL service setup
-  letta_db_service:
+  # PostgreSQL service directly using Railway's PostgreSQL plugin
+  letta_db:
     image: ankane/pgvector:v0.5.1
     envs:
       - key: POSTGRES_USER
@@ -40,39 +15,48 @@ services:
       - key: POSTGRES_DB
         value: ${LETTA_PG_DB}
         prompt: PostgreSQL Database Name
-    # Ensure this service exposes its network endpoint
     exposes:
       - port: 5432
         as: 5432
         internal: true
         global: true
+        generateDomain: true
     volumes:
       - mountPath: /var/lib/postgresql/data
-        volume: pg_data
+        volume: postgresql
+        dirName: /data/postgresql
       - mountPath: /docker-entrypoint-initdb.d/init.sql
         hostPath: ./init.sql
+    healthcheck:
+      type: command
+      command: "pg_isready -U letta"
+      interval: 5000
+      timeout: 5000
+      retries: 5
 
-  # Letta server configuration
+  # Main Letta server as per official template
   letta_server:
     image: letta/letta:latest
     dependsOn:
-      - service: letta_db_service
+      - service: letta_db
         condition: HEALTHY
     envs:
       - key: LETTA_PG_URI
-        value: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${{service.letta_db_service.PRIVATE_DOMAIN}}:5432/${POSTGRES_DB}
+        value: postgresql://${LETTA_PG_USER}:${LETTA_PG_PASSWORD}@${{service.letta_db.PRIVATE_DOMAIN}}:5432/${LETTA_PG_DB}
       - key: LETTA_DB_HOST
-        value: ${{service.letta_db_service.PRIVATE_DOMAIN}}
-      - key: LETTA_DEBUG
-        value: "False"
-      - key: SERVER_DOMAIN  
-        value: ${{service.letta_server.RAILWAY_PUBLIC_DOMAIN}}
-      # LLM API Provider Keys (prompted during deployment)
+        value: ${{service.letta_db.PRIVATE_DOMAIN}}
+      - key: LETTA_SERVER_PASSWORD
+        prompt: Letta Server Password (for connecting from app.letta.com)
+        sensitive: true
+      # LLM API Provider Keys (matching official template)
       - key: OPENAI_API_KEY
-        prompt: OpenAI API Key (leave blank if not using)
+        prompt: OpenAI API Key (for GPT models, leave blank if not using)
         sensitive: true
       - key: ANTHROPIC_API_KEY
-        prompt: Anthropic API Key (leave blank if not using)
+        prompt: Anthropic API Key (for Claude models, leave blank if not using)
+        sensitive: true
+      - key: COMPOSIO_API_KEY
+        prompt: Composio API Key (for tool library access, leave blank if not using)
         sensitive: true
       - key: GROQ_API_KEY
         prompt: Groq API Key (leave blank if not using)
@@ -87,11 +71,6 @@ services:
       - key: GEMINI_API_KEY
         prompt: Google Gemini API Key (leave blank if not using)
         sensitive: true
-      - key: COMPOSIO_API_KEY
-        prompt: Composio API Key (leave blank if not using)
-        sensitive: true
-    healthcheckPath: /
-    healthcheckTimeout: 100
     ports:
       - port: 8083
         as: 8083
@@ -102,11 +81,11 @@ services:
         global: true
         generateDomain: true
 
-  # PgAdmin for database management
+  # Optional PgAdmin (not in official template but added for convenience)
   pgadmin:
     image: dpage/pgadmin4:latest
     dependsOn:
-      - service: letta_db_service
+      - service: letta_db
         condition: HEALTHY
     envs:
       - key: PGADMIN_DEFAULT_EMAIL
@@ -118,8 +97,6 @@ services:
         sensitive: true
       - key: PGADMIN_LISTEN_PORT
         value: 80
-      - key: SERVER_DOMAIN
-        value: ${{service.pgadmin.RAILWAY_PUBLIC_DOMAIN}}
     ports:
       - port: 80
         as: 5050
@@ -130,8 +107,8 @@ services:
         volume: pgadmin_data
 
 volumes:
-  pg_data:
-    name: pg_data
+  postgresql:
+    name: postgres_data
     mountPath: /data/postgresql
   pgadmin_data:
     name: pgadmin_data 
