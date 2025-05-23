@@ -1,4 +1,5 @@
 version: 2
+# Use Railway's PostgreSQL plugin for the database
 plugins:
   - name: postgresql
     serviceId: letta_db_service
@@ -25,26 +26,35 @@ plugins:
           property: port
 
 services:
+  # PostgreSQL service setup
   letta_db_service:
-    dockerComposeFile: railway-compose.yaml
-    dockerComposeService: letta_db
+    image: ankane/pgvector:v0.5.1
     envs:
       - key: POSTGRES_USER
-        value: ${LETTA_PG_USER:-letta}
+        value: ${LETTA_PG_USER}
+        prompt: PostgreSQL Username
       - key: POSTGRES_PASSWORD
-        value: ${LETTA_PG_PASSWORD:-letta}
+        value: ${LETTA_PG_PASSWORD}
+        prompt: PostgreSQL Password
+        sensitive: true
       - key: POSTGRES_DB
-        value: ${LETTA_PG_DB:-letta}
+        value: ${LETTA_PG_DB}
+        prompt: PostgreSQL Database Name
     # Ensure this service exposes its network endpoint
     exposes:
       - port: 5432
         as: 5432
         internal: true
         global: true
+    volumes:
+      - mountPath: /var/lib/postgresql/data
+        volume: pg_data
+      - mountPath: /docker-entrypoint-initdb.d/init.sql
+        hostPath: ./init.sql
 
+  # Letta server configuration
   letta_server:
-    dockerComposeFile: railway-compose.yaml
-    dockerComposeService: letta_server
+    image: letta/letta:latest
     dependsOn:
       - service: letta_db_service
         condition: HEALTHY
@@ -53,21 +63,75 @@ services:
         value: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${{service.letta_db_service.PRIVATE_DOMAIN}}:5432/${POSTGRES_DB}
       - key: LETTA_DB_HOST
         value: ${{service.letta_db_service.PRIVATE_DOMAIN}}
+      - key: LETTA_DEBUG
+        value: "False"
+      - key: SERVER_DOMAIN  
+        value: ${{service.letta_server.RAILWAY_PUBLIC_DOMAIN}}
+      # LLM API Provider Keys (prompted during deployment)
+      - key: OPENAI_API_KEY
+        prompt: OpenAI API Key (leave blank if not using)
+        sensitive: true
+      - key: ANTHROPIC_API_KEY
+        prompt: Anthropic API Key (leave blank if not using)
+        sensitive: true
+      - key: GROQ_API_KEY
+        prompt: Groq API Key (leave blank if not using)
+        sensitive: true
+      - key: AZURE_API_KEY
+        prompt: Azure API Key (leave blank if not using)
+        sensitive: true
+      - key: AZURE_BASE_URL
+        prompt: Azure Base URL (leave blank if not using)
+      - key: AZURE_API_VERSION
+        prompt: Azure API Version (leave blank if not using)
+      - key: GEMINI_API_KEY
+        prompt: Google Gemini API Key (leave blank if not using)
+        sensitive: true
+      - key: COMPOSIO_API_KEY
+        prompt: Composio API Key (leave blank if not using)
+        sensitive: true
     healthcheckPath: /
     healthcheckTimeout: 100
+    ports:
+      - port: 8083
+        as: 8083
+        global: true
+        generateDomain: true
+      - port: 8283
+        as: 8283
+        global: true
+        generateDomain: true
 
+  # PgAdmin for database management
   pgadmin:
-    dockerComposeFile: railway-compose.yaml
-    dockerComposeService: pgadmin
+    image: dpage/pgadmin4:latest
     dependsOn:
       - service: letta_db_service
         condition: HEALTHY
     envs:
       - key: PGADMIN_DEFAULT_EMAIL
-        sync: false
-        value: ${PGADMIN_DEFAULT_EMAIL:-admin@letta.ai}
+        prompt: PgAdmin Email
+        value: ${PGADMIN_DEFAULT_EMAIL}
       - key: PGADMIN_DEFAULT_PASSWORD
-        sync: false
-        value: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+        prompt: PgAdmin Password
+        value: ${PGADMIN_DEFAULT_PASSWORD}
+        sensitive: true
       - key: PGADMIN_LISTEN_PORT
-        value: 80 
+        value: 80
+      - key: SERVER_DOMAIN
+        value: ${{service.pgadmin.RAILWAY_PUBLIC_DOMAIN}}
+    ports:
+      - port: 80
+        as: 5050
+        global: true
+        generateDomain: true
+    volumes:
+      - mountPath: /var/lib/pgadmin
+        volume: pgadmin_data
+
+volumes:
+  pg_data:
+    name: pg_data
+    mountPath: /data/postgresql
+  pgadmin_data:
+    name: pgadmin_data 
