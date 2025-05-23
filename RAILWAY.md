@@ -58,7 +58,7 @@ OPENAI_API_KEY=your_openai_api_key
 ### PostgreSQL
 
 The PostgreSQL database is accessible:
-- **From within Railway**: Use `letta-db:5432` as the host
+- **From within Railway**: Use the private network domain of the service (automatically configured)
 - **From outside Railway**: Use the public URL from Railway dashboard
 - **Connection string**: `postgresql://letta:your_password@hostname:port/letta`
 
@@ -67,7 +67,7 @@ The PostgreSQL database is accessible:
 Access PgAdmin through the URL provided in the Railway dashboard:
 1. Login with your configured email and password
 2. Add a new server connection:
-   - Host: `letta-db` (internal) or the Railway provided PostgreSQL URL (external)
+   - Host: Use the private domain value from the Railway dashboard
    - Port: `5432`
    - Username: `letta` (or your configured LETTA_PG_USER)
    - Password: Your configured LETTA_PG_PASSWORD
@@ -75,6 +75,25 @@ Access PgAdmin through the URL provided in the Railway dashboard:
 ### Letta Application
 
 The main application is accessible through the Railway-provided URL.
+
+## Private Network Configuration
+
+Railway provides private networking between services within the same project. This allows your services to communicate securely without exposing internal endpoints to the public internet.
+
+### How It Works
+
+- Each service gets a private domain name automatically assigned
+- Services can reference each other using their private domains
+- In our configuration, the database can be accessed by other services using its private domain
+
+### Verifying Private Network Setup
+
+To verify that private networking is properly configured:
+
+1. Check the Railway dashboard for each service
+2. Look for the "Private Networking" section
+3. Ensure that the database service shows "EXPOSED" for port 5432
+4. Confirm that the server service shows the proper "DEPENDENCIES" pointing to the database
 
 ## Monitoring and Logs
 
@@ -98,6 +117,22 @@ railway up
 ```
 
 ## Troubleshooting
+
+### "Failed to get private network endpoint" Error
+
+If you encounter this error:
+
+1. **Check service naming**: Ensure service names in `.railway.yaml` match those in `railway-compose.yaml`
+2. **Verify exposures**: Make sure the database service properly exposes port 5432
+3. **Service dependencies**: Confirm that service dependencies are correctly defined
+4. **Restart deployment**: Sometimes simply redeploying can fix networking issues:
+   ```bash
+   railway down
+   railway up
+   ```
+5. **Use explicit domains**: In Railway dashboard, copy the private domain of your database service and manually set it in environment variables
+
+### Other Common Issues
 
 - **Database Connection Issues**: Verify PostgreSQL credentials and check if the service is running
 - **PgAdmin Access Problems**: Confirm PgAdmin environment variables are set correctly
