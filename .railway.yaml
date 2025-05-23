@@ -1,0 +1,48 @@
+version: 2
+plugins:
+  - name: postgresql
+    serviceId: letta_db
+    envs:
+      - name: PGUSER
+        fromService:
+          name: letta_db
+          envKey: POSTGRES_USER
+      - name: PGPASSWORD
+        fromService:
+          name: letta_db
+          envKey: POSTGRES_PASSWORD
+      - name: PGDATABASE
+        fromService:
+          name: letta_db
+          envKey: POSTGRES_DB
+      - name: PGHOST
+        fromService:
+          name: letta_db
+          property: host
+      - name: PGPORT
+        fromService:
+          name: letta_db
+          property: port
+
+services:
+  letta_server:
+    dockerfilePath: Dockerfile
+    dockerfileDirectory: .
+    startCommand: python -m letta.server.rest_api.app
+    envs:
+      - key: LETTA_PG_URI
+        value: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB}
+    healthcheckPath: /
+    healthcheckTimeout: 100
+
+  pgadmin:
+    dockerfilePath: railway-compose.yaml
+    dockerfileDirectory: .
+    envs:
+      - key: PGADMIN_DEFAULT_EMAIL
+        sync: false
+        value: admin@letta.ai
+      - key: PGADMIN_DEFAULT_PASSWORD
+        sync: false
+      - key: PGADMIN_LISTEN_PORT
+        value: 80 
