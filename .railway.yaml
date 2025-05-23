@@ -24,7 +24,7 @@ services:
     volumes:
       - mountPath: /var/lib/postgresql/data
         volume: postgresql
-        dirName: /data/postgresql
+        persistent: true
       - mountPath: /docker-entrypoint-initdb.d/init.sql
         hostPath: ./init.sql
     healthcheck:
@@ -104,11 +104,13 @@ services:
         generateDomain: true
     volumes:
       - mountPath: /var/lib/pgadmin
-        volume: pgadmin_data
+        volume: pgadmin
+        persistent: true
 
+# Define persistent volumes
 volumes:
   postgresql:
-    name: postgres_data
-    mountPath: /data/postgresql
-  pgadmin_data:
-    name: pgadmin_data 
+    persistent: true
+    location: /data/postgresql
+  pgadmin:
+    persistent: true 
